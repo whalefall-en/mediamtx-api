@@ -230,7 +230,7 @@ func newAPI(
 	mwLog := httpLoggerMiddleware(a)
 	router.NoRoute(mwLog, httpServerHeaderMiddleware)
 	group := router.Group("/", mwLog, httpServerHeaderMiddleware)
-
+	group.GET("/info/get", a.onInfoGet)
 	group.GET("/v2/config/get", a.onConfigGet)
 	group.POST("/v2/config/set", a.onConfigSet)
 	group.POST("/v2/config/paths/add/*name", a.onConfigPathsAdd)
@@ -341,7 +341,36 @@ func (a *api) onConfigSet(ctx *gin.Context) {
 
 	ctx.Status(http.StatusOK)
 }
+func (a *api) onInfoGet(ctx *gin.Context) {
+	data := make(map[string]interface{}) // 初始化一个空的map
+	//correct
+	data1, _ := a.hlsManager.apiMuxersList()
+	println("dataInfo")
+	//incorrect
+	data2, _ := a.rtspServer.apiSessionsList()
+	//correct
+	data3, _ := a.webRTCManager.apiSessionsList()
 
+	//incorrect
+	data4, _ := a.rtmpServer.apiConnsList()
+
+	//将这些items合并到data4的items中
+	data["itemCount"] = +len(data1.Items) + len(data2.Items) + len(data3.Items) + len(data4.Items)
+	pageCount1, _ := paginate(&data1.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
+	pageCount2, _ := paginate(&data2.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
+	pageCount3, _ := paginate(&data3.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
+	pageCount4, _ := paginate(&data4.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
+
+	data["itemPage"] = +pageCount1 + pageCount2 + pageCount3 + pageCount4
+
+	data["hls"] = data1.Items
+	data["rtsp"] = data2.Items
+	data["webrtc"] = data3.Items
+	data["rtmp"] = data4.Items
+	//将map转换为json
+
+	ctx.JSON(http.StatusOK, data)
+}
 func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 	name, ok := paramName(ctx)
 	if !ok {
