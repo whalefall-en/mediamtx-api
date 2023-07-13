@@ -341,6 +341,12 @@ func (a *api) onConfigSet(ctx *gin.Context) {
 
 	ctx.Status(http.StatusOK)
 }
+
+/*
+*
+查询信息api
+Author：xgh
+*/
 func (a *api) onInfoGet(ctx *gin.Context) {
 	data := make(map[string]interface{}) // 初始化一个空的map
 	//correct
