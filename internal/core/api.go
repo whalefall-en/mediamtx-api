@@ -349,29 +349,21 @@ Author：xgh
 */
 func (a *api) onInfoGet(ctx *gin.Context) {
 	data := make(map[string]interface{}) // 初始化一个空的map
-	data1, _ := a.hlsManager.apiMuxersList()
-	data2, _ := a.rtspServer.apiSessionsList()
-	data3, _ := a.webRTCManager.apiSessionsList()
-	data4, _ := a.rtmpServer.apiConnsList()
 	pathlist, _ := a.pathManager.apiPathsList()
-	//将这些items合并到data4的items中,paginate是分页函数，将items分页
-	data["itemCount"] = +len(data1.Items) + len(data2.Items) + len(data3.Items) + len(data4.Items)
-	pageCount1, _ := paginate(&data1.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
-	pageCount2, _ := paginate(&data2.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
-	pageCount3, _ := paginate(&data3.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
-	pageCount4, _ := paginate(&data4.Items, ctx.Query("itemsPerPage"), ctx.Query("page"))
-	//遍历pathlist里的items，把每个item的reader数量加起来
-	reader := 0
-	for _, v := range pathlist.Items {
 
-		reader += len(v.Readers)
+	//遍历pathlist里的items,将items的信息存入data
+	//定义一个itemlist，保存所有的item信息
+	var itemlist []map[string]interface{}
+	for _, item := range pathlist.Items {
+		dataItem := make(map[string]interface{})
+		dataItem["name"] = item.Name
+		dataItem["source"] = item.Source
+		dataItem["readerCount"] = len(item.Readers)
+		//将item信息存入itemlist
+		itemlist = append(itemlist, dataItem)
 	}
-	data["readerCount"] = reader
-	data["itemPage"] = +pageCount1 + pageCount2 + pageCount3 + pageCount4
-	data["hls"] = data1.Items
-	data["rtsp"] = data2.Items
-	data["webrtc"] = data3.Items
-	data["rtmp"] = data4.Items
+	data["items"] = itemlist
+	data["pathCount"] = len(pathlist.Items)
 	//将map转换为json
 	ctx.JSON(http.StatusOK, data)
 }
