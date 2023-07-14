@@ -348,7 +348,7 @@ func (a *api) onConfigSet(ctx *gin.Context) {
 Author：xgh
 */
 func (a *api) onInfoGet(ctx *gin.Context) {
-	data := make(map[string]interface{}) // 初始化一个空的map
+	data := make(map[string]interface{}) // 初始化一个空的	map
 	//correct
 	data1, _ := a.hlsManager.apiMuxersList()
 	println("dataInfo")
