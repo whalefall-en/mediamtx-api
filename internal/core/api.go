@@ -369,17 +369,18 @@ func (a *api) onInfoGet(ctx *gin.Context) {
 }
 func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 	name, ok := paramName(ctx)
+	print(name)
 	if !ok {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-
+	print(377)
 	in, err := loadConfPathData(ctx)
 	if err != nil {
+		print(380)
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -410,7 +411,7 @@ func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 	// since reloading the configuration can cause the shutdown of the API,
 	// call it in a goroutine
 	go a.parent.apiConfigSet(newConf)
-
+	print(414)
 	ctx.Status(http.StatusOK)
 }
 
