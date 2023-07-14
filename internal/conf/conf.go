@@ -96,6 +96,7 @@ type Conf struct {
 	PPROFAddress              string          `json:"pprofAddress"`
 	RunOnConnect              string          `json:"runOnConnect"`
 	RunOnConnectRestart       bool            `json:"runOnConnectRestart"`
+	DRVDirectory              string          `json:"drvDirectory"`
 
 	// RTSP
 	RTSPDisable       bool        `json:"rtspDisable"`

@@ -226,6 +226,10 @@ webrtcICEUDPMuxAddress:
 # optimal for WebRTC.
 webrtcICETCPMuxAddress:
 
+# directory where the drv and snapshot files are stored.
+# If not specified, the current directory is used.
+drvDirectory: "/home/lyp/videos/test"
+
 ###############################################
 # Path parameters
 
@@ -236,10 +240,10 @@ webrtcICETCPMuxAddress:
 # The settings under the path "all" are applied to all paths that do not match
 # another entry.
 paths:
-#  test:
-#    source: rtsp://localhost:8553/test
-  all:
+  test:
+    source: rtsp://localhost:8553/test
 
+  all:
     # Source of the stream. This can be:
     # * publisher -> the stream is published by a RTSP or RTMP client
     # * rtsp://existing-url -> the stream is pulled from another RTSP server / camera
@@ -252,7 +256,6 @@ paths:
     # * redirect -> the stream is provided by another path or server
     # * rpiCamera -> the stream is provided by a Raspberry Pi Camera
     source: publisher
-
 
     ###############################################
     # General path parameters
@@ -468,3 +471,4 @@ paths:
     runOnRead:
     # Restart the command if it exits.
     runOnReadRestart: no
+
