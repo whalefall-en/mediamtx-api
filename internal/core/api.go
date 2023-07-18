@@ -245,7 +245,7 @@ func newAPI(
 
 	// group.POST("/v2/dvr/start/*name", a.onDVRStart)
 	// group.POST("/v2/dvr/stop/*name", a.onDVRStop)
-	group.POST("/v2/dvrRecord/*name", a.onDVRRecord)
+	group.POST("/v2/dvr/*name", a.onDVR)
 	group.POST("/v2/snapshot/*name", a.onSnapshot)
 
 	if !interfaceIsEmpty(a.hlsManager) {
@@ -900,7 +900,7 @@ func getHour() string {
 	return fmt.Sprintf("%02d-%02d-%02d", hour, min, sec)
 }
 
-func (a *api) onDVRRecord(ctx *gin.Context) {
+func (a *api) onDVR(ctx *gin.Context) {
 	name, ok := paramName(ctx)
 	if !ok {
 		ctx.AbortWithStatus(http.StatusBadRequest)
@@ -912,16 +912,6 @@ func (a *api) onDVRRecord(ctx *gin.Context) {
 		abortWithError(ctx, err)
 		return
 	}
-
-	//DVRRecord(ctx.Param("time"), data.Conf.Source)
-	fmt.Println(data.Conf.Source)
-
-	err = ctx.Request.ParseForm()
-	if err != nil {
-		abortWithError(ctx, err)
-		return
-	}
-
 	type req struct {
 		StartTime string `form:"startTime"`
 		Duration  string `form:"duration"`
@@ -933,34 +923,29 @@ func (a *api) onDVRRecord(ctx *gin.Context) {
 		abortWithError(ctx, err)
 		return
 	}
-	fmt.Println(string(body))
 	var r req
 	err = json.Unmarshal(body, &r)
 	if err != nil {
 		abortWithError(ctx, err)
 		return
 	}
-	fmt.Println(r.StartTime)
-	fmt.Println(r.Duration)
 	if r.Dir == "" {
 		r.Dir = a.conf.DRVDirectory + "/" + getDate()
 	}
-	fmt.Println(r.Dir)
 	if r.Name == "" {
 		r.Name = getHour() + ".mp4"
 	}
-	fmt.Println(r.Name)
 
 	_, err = os.Stat(r.Dir)
 	if os.IsNotExist(err) {
 		err = os.MkdirAll(r.Dir, 0755)
 		if err != nil {
 			abortWithError(ctx, err)
-			a.Log(logger.Info, "Mkdir error: "+err.Error())
+			a.Log(logger.Info, "DVR Mkdir error: "+err.Error())
 			return
 		}
 	}
-	go DVRRecord(a, r.StartTime, r.Duration, data.Conf.Source, r.Dir, r.Name)
+	go DVR(a, r.StartTime, r.Duration, data.Conf.Source, r.Dir, r.Name)
 	type res struct {
 		Location string `json:"location"`
 	}
@@ -992,7 +977,6 @@ func (a *api) onSnapshot(ctx *gin.Context) {
 		abortWithError(ctx, err)
 		return
 	}
-	fmt.Println(string(body))
 	var r req
 	err = json.Unmarshal(body, &r)
 	if err != nil {
@@ -1007,7 +991,6 @@ func (a *api) onSnapshot(ctx *gin.Context) {
 	if r.Name == "" {
 		r.Name = getHour() + ".jpg"
 	}
-	fmt.Println(r.Name)
 
 	_, err = os.Stat(r.Dir)
 	if os.IsNotExist(err) {
@@ -1027,26 +1010,24 @@ func (a *api) onSnapshot(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func DVRRecord(a *api, startTime string, dur string, stream string, dir string, name string) {
-	fmt.Println("start DVRRecord " + stream)
+func DVR(a *api, startTime string, dur string, stream string, dir string, name string) {
 	cmd := exec.Command("ffmpeg", "-i", stream, "-c", "copy", "-ss", startTime, "-t", dur, dir+"/"+name)
 	err := cmd.Run()
 	if err != nil {
-		a.Log(logger.Info, "DVRRecord error: "+err.Error())
+		a.Log(logger.Info, "DVR error: "+err.Error())
 		output, _ := cmd.Output()
-		a.Log(logger.Info, "DVRRecord error: "+string(output))
+		a.Log(logger.Info, "ffmpeg output: "+string(output))
 	}
-	fmt.Println("finish DVRRecord " + stream)
+	a.Log(logger.Info, "DVR: "+dir+"/"+name+" "+"from: "+" "+stream)
 }
 
 func Snapshot(a *api, startTime string, stream string, dir string, name string) {
-	fmt.Println("start Snapshot " + stream)
 	cmd := exec.Command("ffmpeg", "-i", stream, "-ss", startTime, "-vframes", "1", dir+"/"+name)
 	err := cmd.Run()
 	if err != nil {
 		a.Log(logger.Info, "Snapshot error: "+err.Error())
 	}
-	fmt.Println("finish Snapshot " + stream)
+	a.Log(logger.Info, "Snapshot: "+dir+"/"+name+" "+"from: "+" "+stream)
 }
 
 // confReload is called by core.
