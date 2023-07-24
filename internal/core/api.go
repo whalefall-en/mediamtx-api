@@ -3,10 +3,15 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -226,6 +231,7 @@ func newAPI(
 
 	router := gin.New()
 	router.SetTrustedProxies(nil)
+	//router.StaticFS("/static", http.Dir("static"))
 
 	mwLog := httpLoggerMiddleware(a)
 	router.NoRoute(mwLog, httpServerHeaderMiddleware)
@@ -236,6 +242,11 @@ func newAPI(
 	group.POST("/v2/config/paths/add/*name", a.onConfigPathsAdd)
 	group.POST("/v2/config/paths/edit/*name", a.onConfigPathsEdit)
 	group.POST("/v2/config/paths/remove/*name", a.onConfigPathsDelete)
+
+	// group.POST("/v2/dvr/start/*name", a.onDVRStart)
+	// group.POST("/v2/dvr/stop/*name", a.onDVRStop)
+	group.POST("/v2/dvr/*name", a.onDVR)
+	group.POST("/v2/snapshot/*name", a.onSnapshot)
 
 	if !interfaceIsEmpty(a.hlsManager) {
 		group.GET("/v2/hlsmuxers/list", a.onHLSMuxersList)
@@ -348,6 +359,7 @@ func (a *api) onConfigSet(ctx *gin.Context) {
 Author：xgh
 */
 func (a *api) onInfoGet(ctx *gin.Context) {
+
 	data := make(map[string]interface{}) // 初始化一个空的map
 	pathlist, _ := a.pathManager.apiPathsList()
 
@@ -870,6 +882,149 @@ func (a *api) onWebRTCSessionsKick(ctx *gin.Context) {
 	}
 
 	ctx.Status(http.StatusOK)
+}
+
+func getDate() string {
+	now := time.Now()
+	year, month, day := now.Date()
+	fmt.Println(year, month, day)
+	return fmt.Sprintf("%d%02d%02d", year, month, day)
+}
+func getHour() string {
+	now := time.Now()
+	hour, min, sec := now.Clock()
+	fmt.Println(hour, min, sec)
+	return fmt.Sprintf("%02d-%02d-%02d", hour, min, sec)
+}
+
+func (a *api) onDVR(ctx *gin.Context) {
+	name, ok := paramName(ctx)
+	if !ok {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
+	data, err := a.pathManager.apiPathsGet(name)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	type req struct {
+		StartTime string `form:"startTime"`
+		Duration  string `form:"duration"`
+		Dir       string `form:"dir"`
+		Name      string `form:"name"`
+	}
+	body, err := ioutil.ReadAll(ctx.Request.Body)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	var r req
+	err = json.Unmarshal(body, &r)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	if r.Dir == "" {
+		r.Dir = a.conf.DRVDirectory + "/" + getDate()
+	}
+	if r.Name == "" {
+		r.Name = getHour() + ".mp4"
+	}
+
+	_, err = os.Stat(r.Dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(r.Dir, 0755)
+		if err != nil {
+			abortWithError(ctx, err)
+			a.Log(logger.Info, "DVR Mkdir error: "+err.Error())
+			return
+		}
+	}
+	go DVR(a, r.StartTime, r.Duration, data.Conf.Source, r.Dir, r.Name)
+	type res struct {
+		Location string `json:"location"`
+	}
+	var response res
+	response.Location = r.Dir + "/" + r.Name
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *api) onSnapshot(ctx *gin.Context) {
+	name, ok := paramName(ctx)
+	if !ok {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
+	data, err := a.pathManager.apiPathsGet(name)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+
+	type req struct {
+		StartTime string `form:"startTime"`
+		Dir       string `form:"dir"`
+		Name      string `form:"name"`
+	}
+	body, err := ioutil.ReadAll(ctx.Request.Body)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	var r req
+	err = json.Unmarshal(body, &r)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	fmt.Println(r.StartTime)
+	if r.Dir == "" {
+		r.Dir = a.conf.DRVDirectory + "/" + getDate()
+	}
+	fmt.Println(r.Dir)
+	if r.Name == "" {
+		r.Name = getHour() + ".jpg"
+	}
+
+	_, err = os.Stat(r.Dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(r.Dir, 0755)
+		if err != nil {
+			abortWithError(ctx, err)
+			a.Log(logger.Info, "Mkdir error: "+err.Error())
+			return
+		}
+	}
+	go Snapshot(a, r.StartTime, data.Conf.Source, r.Dir, r.Name)
+	type res struct {
+		Location string `json:"location"`
+	}
+	var response res
+	response.Location = r.Dir + "/" + r.Name
+	ctx.JSON(http.StatusOK, response)
+}
+
+func DVR(a *api, startTime string, dur string, stream string, dir string, name string) {
+	cmd := exec.Command("ffmpeg", "-i", stream, "-c", "copy", "-ss", startTime, "-t", dur, dir+"/"+name)
+	err := cmd.Run()
+	if err != nil {
+		a.Log(logger.Info, "DVR error: "+err.Error())
+		output, _ := cmd.Output()
+		a.Log(logger.Info, "ffmpeg output: "+string(output))
+	}
+	a.Log(logger.Info, "DVR: "+dir+"/"+name+" "+"from: "+" "+stream)
+}
+
+func Snapshot(a *api, startTime string, stream string, dir string, name string) {
+	cmd := exec.Command("ffmpeg", "-i", stream, "-ss", startTime, "-vframes", "1", dir+"/"+name)
+	err := cmd.Run()
+	if err != nil {
+		a.Log(logger.Info, "Snapshot error: "+err.Error())
+	}
+	a.Log(logger.Info, "Snapshot: "+dir+"/"+name+" "+"from: "+" "+stream)
 }
 
 // confReload is called by core.
