@@ -374,10 +374,8 @@ func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	print(377)
 	in, err := loadConfPathData(ctx)
 	if err != nil {
-		print(380)
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
@@ -411,7 +409,6 @@ func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 	// since reloading the configuration can cause the shutdown of the API,
 	// call it in a goroutine
 	go a.parent.apiConfigSet(newConf)
-	print(414)
 	ctx.Status(http.StatusOK)
 }
 
