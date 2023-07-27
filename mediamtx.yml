@@ -240,9 +240,8 @@ drvDirectory: "/home/lyp/videos/test"
 # The settings under the path "all" are applied to all paths that do not match
 # another entry.
 paths:
-  test:
-    source: rtsp://localhost:8553/test
-
+#  test:
+#    source: rtsp://localhost:8553/test
   all:
     # Source of the stream. This can be:
     # * publisher -> the stream is published by a RTSP or RTMP client

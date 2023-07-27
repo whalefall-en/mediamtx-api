@@ -359,7 +359,7 @@ func (a *api) onConfigSet(ctx *gin.Context) {
 Author：xgh
 */
 func (a *api) onInfoGet(ctx *gin.Context) {
-
+	a.Log(logger.Info, "visit onInfoGet api")
 	data := make(map[string]interface{}) // 初始化一个空的map
 	pathlist, _ := a.pathManager.apiPathsList()
 
