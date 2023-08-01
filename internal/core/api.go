@@ -362,16 +362,16 @@ func (a *api) onInfoGet(ctx *gin.Context) {
 	a.Log(logger.Info, "visit onInfoGet api")
 	data := make(map[string]interface{}) // 初始化一个空的map
 	pathlist, _ := a.pathManager.apiPathsList()
-
-	//遍历pathlist里的items,将items的信息存入data
-	//定义一个itemlist，保存所有的item信息
+	//遍历pathologist里的items,将items的信息存入data
+	//定义一个item-list，保存所有的item信息
 	var itemlist []map[string]interface{}
 	for _, item := range pathlist.Items {
 		dataItem := make(map[string]interface{})
 		dataItem["name"] = item.Name
 		dataItem["source"] = item.Source
 		dataItem["readerCount"] = len(item.Readers)
-		//将item信息存入itemlist
+		dataItem["readers"] = item.Readers
+		//将item信息存入item-list
 		itemlist = append(itemlist, dataItem)
 	}
 	data["items"] = itemlist
