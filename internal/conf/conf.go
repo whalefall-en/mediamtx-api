@@ -97,6 +97,9 @@ type Conf struct {
 	RunOnConnect              string          `json:"runOnConnect"`
 	RunOnConnectRestart       bool            `json:"runOnConnectRestart"`
 	DRVDirectory              string          `json:"drvDirectory"`
+	FLVTransServer            string          `json:"flvTransServer"`
+	FLVAPIPort                string          `json:"flvAPIPort"`
+	FLVPushPort               string          `json:"flvPushPort"`
 
 	// RTSP
 	RTSPDisable       bool        `json:"rtspDisable"`

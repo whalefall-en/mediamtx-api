@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,7 +232,7 @@ func newAPI(
 
 	router := gin.New()
 	router.SetTrustedProxies(nil)
-	//router.StaticFS("/static", http.Dir("static"))
+	router.StaticFS("/static", http.Dir(a.conf.DRVDirectory))
 
 	mwLog := httpLoggerMiddleware(a)
 	router.NoRoute(mwLog, httpServerHeaderMiddleware)
@@ -247,6 +248,9 @@ func newAPI(
 	// group.POST("/v2/dvr/stop/*name", a.onDVRStop)
 	group.POST("/v2/dvr/*name", a.onDVR)
 	group.POST("/v2/snapshot/*name", a.onSnapshot)
+
+	//httpflv
+	group.GET("/v2/httpflv/enable/*name", a.onFLVEnable)
 
 	if !interfaceIsEmpty(a.hlsManager) {
 		group.GET("/v2/hlsmuxers/list", a.onHLSMuxersList)
@@ -381,7 +385,7 @@ func (a *api) onInfoGet(ctx *gin.Context) {
 }
 func (a *api) onConfigPathsAdd(ctx *gin.Context) {
 	name, ok := paramName(ctx)
-	print(name)
+	//print(name)
 	if !ok {
 		ctx.AbortWithStatus(http.StatusBadRequest)
 		return
@@ -887,13 +891,13 @@ func (a *api) onWebRTCSessionsKick(ctx *gin.Context) {
 func getDate() string {
 	now := time.Now()
 	year, month, day := now.Date()
-	fmt.Println(year, month, day)
+	//fmt.Println(year, month, day)
 	return fmt.Sprintf("%d%02d%02d", year, month, day)
 }
 func getHour() string {
 	now := time.Now()
 	hour, min, sec := now.Clock()
-	fmt.Println(hour, min, sec)
+	//fmt.Println(hour, min, sec)
 	return fmt.Sprintf("%02d-%02d-%02d", hour, min, sec)
 }
 
@@ -980,11 +984,11 @@ func (a *api) onSnapshot(ctx *gin.Context) {
 		abortWithError(ctx, err)
 		return
 	}
-	fmt.Println(r.StartTime)
+	//fmt.Println(r.StartTime)
 	if r.Dir == "" {
 		r.Dir = a.conf.DRVDirectory + "/" + getDate()
 	}
-	fmt.Println(r.Dir)
+	//fmt.Println(r.Dir)
 	if r.Name == "" {
 		r.Name = getHour() + ".jpg"
 	}
@@ -1008,23 +1012,108 @@ func (a *api) onSnapshot(ctx *gin.Context) {
 }
 
 func DVR(a *api, startTime string, dur string, stream string, dir string, name string) {
-	cmd := exec.Command("ffmpeg", "-i", stream, "-c", "copy", "-ss", startTime, "-t", dur, dir+"/"+name)
+	var cmd *exec.Cmd
+	if (strings.HasPrefix(stream, "rtsps://")) || (strings.HasPrefix(stream, "rtsp://")) {
+		cmd = exec.Command("ffmpeg", "-rtsp_transport", "tcp", "-i", stream, "-c", "copy", "-ss", startTime, "-t", dur, dir+"/"+name)
+	} else {
+		cmd = exec.Command("ffmpeg", "-i", stream, "-c", "copy", "-ss", startTime, "-t", dur, dir+"/"+name)
+	}
+	a.Log(logger.Info, "DVR: "+dir+"/"+name+" from: "+stream)
 	err := cmd.Run()
 	if err != nil {
 		a.Log(logger.Info, "DVR error: "+err.Error())
 		output, _ := cmd.Output()
 		a.Log(logger.Info, "ffmpeg output: "+string(output))
 	}
-	a.Log(logger.Info, "DVR: "+dir+"/"+name+" "+"from: "+" "+stream)
+	a.Log(logger.Info, "DVR: "+dir+"/"+name+" finished")
 }
 
 func Snapshot(a *api, startTime string, stream string, dir string, name string) {
-	cmd := exec.Command("ffmpeg", "-i", stream, "-ss", startTime, "-vframes", "1", dir+"/"+name)
+	var cmd *exec.Cmd
+	if (strings.HasPrefix(stream, "rtsps://")) || (strings.HasPrefix(stream, "rtsp://")) {
+		cmd = exec.Command("ffmpeg", "-rtsp_transport", "tcp", "-i", stream, "-ss", startTime, "-vframes", "1", dir+"/"+name)
+	} else {
+		cmd = exec.Command("ffmpeg", "-i", stream, "-ss", startTime, "-vframes", "1", dir+"/"+name)
+	}
 	err := cmd.Run()
+	output, _ := cmd.Output()
 	if err != nil {
 		a.Log(logger.Info, "Snapshot error: "+err.Error())
+		a.Log(logger.Info, "ffmpeg output: "+string(output))
 	}
-	a.Log(logger.Info, "Snapshot: "+dir+"/"+name+" "+"from: "+" "+stream)
+	a.Log(logger.Info, "Snapshot: "+dir+"/"+name+" from: "+stream)
+}
+
+func getFLVKey(a *api, path string) string {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "http://"+a.conf.FLVTransServer+a.conf.FLVAPIPort+"/control/get?room="+path, nil)
+	if err != nil {
+		a.Log(logger.Info, "get flv key res error: "+err.Error())
+		return ""
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		a.Log(logger.Info, "get flv key resp error: "+err.Error())
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		a.Log(logger.Info, "get flv key resp body error: "+err.Error())
+		return ""
+	}
+	//fmt.Println(string(body))
+	type res struct {
+		Status int    `json:"status"`
+		Data   string `json:"data"`
+	}
+	var response res
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		a.Log(logger.Info, "get flv key resp json error: "+err.Error())
+		return ""
+	}
+	if response.Status != 200 {
+		a.Log(logger.Info, "get flv key resp status error: "+strconv.Itoa(response.Status))
+		return ""
+	}
+	return response.Data
+}
+
+func FLVTrans(a *api, key string, sourcePath string) {
+	cmd := exec.Command("ffmpeg", "-i", "rtmp://localhost"+a.conf.RTMPAddress+"/"+sourcePath, "-c", "copy", "-f", "flv",
+		"rtmp://"+a.conf.FLVTransServer+a.conf.FLVPushPort+"/live/"+key)
+	err := cmd.Run()
+	if err != nil {
+		a.Log(logger.Info, "FLV error: "+err.Error())
+	} else {
+		a.Log(logger.Info, "FLV "+"from: "+sourcePath+"finished")
+	}
+}
+
+func (a *api) onFLVEnable(ctx *gin.Context) {
+	name, ok := paramName(ctx)
+	if !ok {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	_, err := a.pathManager.apiPathsGet(name)
+	if err != nil {
+		abortWithError(ctx, err)
+		return
+	}
+	//fmt.Println(data.Conf.Source)
+
+	FLVKey := getFLVKey(a, name)
+	if FLVKey == "" {
+		ctx.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+
+	go FLVTrans(a, FLVKey, name)
+
+	ctx.Status(http.StatusOK)
 }
 
 // confReload is called by core.

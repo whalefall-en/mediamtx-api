@@ -6,6 +6,7 @@ RUN apk add --no-cache \
 WORKDIR /s
 
 COPY go.mod go.sum ./
+RUN go env -w GOPROXY=https://goproxy.cn,direct #设置代理
 RUN go mod download #下载依赖
 
 COPY . ./

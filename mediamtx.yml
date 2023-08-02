@@ -40,7 +40,7 @@ externalAuthenticationURL:
 # Enable the HTTP API.
 api: yes
 # Address of the API listener.
-apiAddress: 127.0.0.1:9997
+apiAddress: 0.0.0.0:9997
 
 # Enable Prometheus-compatible metrics.
 metrics: no
@@ -226,9 +226,15 @@ webrtcICEUDPMuxAddress:
 # optimal for WebRTC.
 webrtcICETCPMuxAddress:
 
-# directory where the drv and snapshot files are stored.
+# Directory where the drv and snapshot files are stored.
 # If not specified, the current directory is used.
-drvDirectory: "/home/lyp/videos/test"
+# Bind volume to the container to persist the files.
+drvDirectory: "/test"
+
+# IP & Port of the HTTPFLV trans server.
+flvTransServer: "172.21.64.92"
+flvAPIPort: ":8090"
+flvPushPort: ":1936"
 
 ###############################################
 # Path parameters
@@ -240,8 +246,9 @@ drvDirectory: "/home/lyp/videos/test"
 # The settings under the path "all" are applied to all paths that do not match
 # another entry.
 paths:
-#  test:
-#    source: rtsp://localhost:8553/test
+  mystream:
+   source: rtsp://172.21.64.92:8550/mystream
+
   all:
     # Source of the stream. This can be:
     # * publisher -> the stream is published by a RTSP or RTMP client
